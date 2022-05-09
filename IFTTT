@@ -1,0 +1,107 @@
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <WiFiClient.h>
+#define in 5 
+#define trig 4
+
+WiFiClient wifiClient;
+
+int inches = 100;
+
+int status = WL_IDLE_STATUS; //not required.
+
+const char* ssid = "test_net";
+const char* password = "asdfghjkl";
+int doorClosed = 1;
+
+void setup() {
+
+  Serial.begin(115200);
+
+  setupWifi();
+
+  pinMode(in, INPUT);
+  pinMode(trig, OUTPUT);
+   //get_http();
+
+}
+
+void setupWifi()
+{
+   WiFi.mode(WIFI_STA);
+   status = WiFi.begin(ssid, password);    
+
+   Serial.print("Attempting to connect to SSID: ");
+   Serial.println(ssid);  
+
+   while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.print(".");
+   }
+   Serial.println("Connected to wifi");
+}
+
+void loop() {
+
+    digitalWrite(trig, LOW);
+    delayMicroseconds(5);
+    digitalWrite(trig, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trig, LOW);
+    
+    if (WiFi.status() != WL_CONNECTED)
+    {
+       setupWifi();
+    }
+
+    int duration = pulseIn(in,HIGH);
+    inches = (duration/2) / 74;
+   
+    if ((inches > 4) && (doorClosed == 1))
+    {
+      Serial.println("DOOR OPEN!!");
+      while (get_http(String("DOOR_OPEN_")) != 0);      
+      doorClosed = 0;
+    } 
+    else if (( inches < 4 ) && (doorClosed == 0))
+    {
+      Serial.println("DOOR CLOSED!!");
+      while (get_http(String("DOOR_CLOSED_")) != 0);      
+      doorClosed = 1;
+    }
+    delay(10);
+
+
+}
+
+
+int get_http(String state)
+{
+   HTTPClient http;
+   
+   int ret = 0;
+   Serial.print("[HTTP] begin...\n");
+      
+    http.begin(wifiClient,"https://maker.ifttt.com/trigger/"+state+"/json/with/key/mKMz8zCgQ7DvL5zKJ3qa1vWTWz784CFqOmlZA-I-8HZ"); 
+
+    Serial.print("[HTTP] GET...\n");
+    
+    int httpCode = http.GET();
+    
+    if(httpCode > 0) {
+      
+    Serial.printf("[HTTP] GET code: %d\n", httpCode);
+
+      if(httpCode == HTTP_CODE_OK) {
+        String payload = http.getString();
+        Serial.println(payload);
+      }
+    } else {
+        ret = -1;
+        Serial.printf("[HTTP] GET failed, error: %s\n", http.errorToString(httpCode).c_str());
+        delay(500);
+    }
+
+    http.end();
+    return ret;
+} 
